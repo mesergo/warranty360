@@ -61,7 +61,7 @@ export function DocumentsSection({ productId }: { productId: string }) {
           >
             {d.filePath ? (
               <a
-                href={`${API_ORIGIN}${d.filePath}`}
+                href={`${API_ORIGIN}${d.filePath}?doc=${d._id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-indigo-600 hover:underline dark:hover:text-indigo-400"
