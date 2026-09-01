@@ -99,6 +99,9 @@ export function ProductForm({
   );
   const [serviceProviderId, setServiceProviderId] = useState(initialProduct?.warrantyServiceProviderId?._id ?? '');
   const [notes, setNotes] = useState(initialProduct?.notes ?? '');
+  const [reportedInstallLocation, setReportedInstallLocation] = useState(
+    initialProduct?.reportedInstallLocation ?? '',
+  );
   const [status, setStatus] = useState<ProductStatus>(initialProduct?.status ?? 'active');
   const [error, setError] = useState<string | null>(null);
 
@@ -142,6 +145,7 @@ export function ProductForm({
       locationId: mode === 'institution' ? locationId || undefined : undefined,
       notes: mode === 'institution' ? notes || undefined : undefined,
       status: mode === 'institution' ? status : undefined,
+      reportedInstallLocation: mode === 'consumer' ? reportedInstallLocation || undefined : undefined,
     };
 
     try {
@@ -217,6 +221,17 @@ export function ProductForm({
             </Field>
           )}
         </div>
+
+        {mode === 'consumer' && (
+          <Field label="מיקום ההתקנה בבית (למשל: סלון, חדר ילדים)">
+            <input
+              value={reportedInstallLocation}
+              onChange={(e) => setReportedInstallLocation(e.target.value)}
+              placeholder="איפה המוצר מותקן בפועל?"
+              className={inputClass}
+            />
+          </Field>
+        )}
 
         <div className="grid grid-cols-3 gap-3">
           <Field label="תאריך רכישה">

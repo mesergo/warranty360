@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import { WarrantyBadge } from '../../components/WarrantyBadge';
 import { Badge } from '../../components/Badge';
-import { InstallLocationEditor } from '../../components/InstallLocationEditor';
 import { DocumentsSection } from '../../components/DocumentsSection';
 import { ProductForm } from '../../components/ProductForm';
 import { ProviderContactCard } from '../../components/ProviderContactCard';
@@ -94,13 +93,11 @@ export default function ConsumerProductDetail() {
               <dt className="text-slate-400 dark:text-slate-500">תום אחריות</dt>
               <dd className="mt-1 font-medium text-slate-800 dark:text-slate-200">{formatDate(product.warrantyEnd)}</dd>
             </div>
+            <div>
+              <dt className="text-slate-400 dark:text-slate-500">מיקום ההתקנה בבית</dt>
+              <dd className="mt-1 font-medium text-slate-800 dark:text-slate-200">{product.reportedInstallLocation || '—'}</dd>
+            </div>
           </dl>
-
-          <InstallLocationEditor
-            key={product._id}
-            productId={product._id}
-            initialValue={product.reportedInstallLocation ?? ''}
-          />
 
           <ProviderContactCard isUnderWarranty={isUnderWarranty} provider={serviceProvider} partner={partner} />
 
