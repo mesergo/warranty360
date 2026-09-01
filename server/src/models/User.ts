@@ -6,6 +6,7 @@ const userSchema = new Schema(
     name: { type: String, required: true },
     phone: { type: String, required: true, unique: true },
     email: { type: String },
+    googleId: { type: String, unique: true, sparse: true },
     role: { type: String, enum: ['consumer', 'admin', 'technician'], required: true },
     isActive: { type: Boolean, default: true },
     lastLoginAt: { type: Date },

@@ -21,7 +21,19 @@ export function useVerifyOtp() {
       name?: string;
       via: PhoneAuthChannel;
       accountType?: 'consumer' | 'admin';
+      googleCredential?: string;
     }) => api.post<{ token: string; user: User }>('/auth/otp/verify', input),
     onSuccess: (data) => setSession(data.token, data.user),
+  });
+}
+
+export function useGoogleLogin() {
+  const setSession = useAuth((s) => s.setSession);
+  return useMutation({
+    mutationFn: (credential: string) =>
+      api.post<{ token: string; user: User } | { needsPhone: true; name: string }>('/auth/google', { credential }),
+    onSuccess: (data) => {
+      if ('token' in data) setSession(data.token, data.user);
+    },
   });
 }

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useRequestOtp, useVerifyOtp, type PhoneAuthChannel } from '../hooks/useAuthApi';
+import { useGoogleLogin, useRequestOtp, useVerifyOtp, type PhoneAuthChannel } from '../hooks/useAuthApi';
 import { useAuth } from '../store/auth';
 import { ApiError } from '../lib/api';
+import { GoogleSignInButton } from '../components/GoogleSignInButton';
 
 const FEATURES = [
   { icon: '📉', title: 'חיסכון כספי ניכר', text: 'בתחזוקה ובתיקונים מיותרים, בזכות מעקב אחריות מדויק.' },
@@ -44,9 +45,11 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [cooldownNow, setCooldownNow] = useState(() => Date.now());
+  const [googleCredential, setGoogleCredential] = useState<string | null>(null);
 
   const requestOtp = useRequestOtp();
   const verifyOtp = useVerifyOtp();
+  const googleLogin = useGoogleLogin();
 
   useEffect(() => {
     if (cooldownUntil === null) return;
@@ -71,6 +74,23 @@ export default function Home() {
     setError(null);
   }
 
+  async function handleGoogleCredential(credential: string) {
+    setError(null);
+    try {
+      const res = await googleLogin.mutateAsync(credential);
+      if ('token' in res) {
+        navigate(res.user.role === 'consumer' ? '/consumer' : '/institution');
+        return;
+      }
+      // משתמש חדש - טלפון הוא שדה חובה, ממשיכים לזרימת האימות הרגילה עם שם מוצע מ-Google.
+      setGoogleCredential(credential);
+      setName(res.name);
+      setMode('register');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'ההתחברות עם Google נכשלה');
+    }
+  }
+
   async function submitDetails(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -89,7 +109,14 @@ export default function Home() {
     e.preventDefault();
     setError(null);
     try {
-      const res = await verifyOtp.mutateAsync({ phone, code, name, via, accountType: accountType ?? 'consumer' });
+      const res = await verifyOtp.mutateAsync({
+        phone,
+        code,
+        name,
+        via,
+        accountType: accountType ?? 'consumer',
+        googleCredential: googleCredential ?? undefined,
+      });
       navigate(res.user.role === 'consumer' ? '/consumer' : '/institution');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'הקוד שהוזן אינו תקין');
@@ -134,7 +161,9 @@ export default function Home() {
           </div>
         ) : step === 'select' ? (
           <div>
-            <h2 className="mb-6 text-center text-xl font-bold text-slate-900 dark:text-slate-100">הרשמה או התחברות</h2>
+            <h2 className="mb-6 text-center text-xl font-bold text-slate-900 dark:text-slate-100">
+              {googleCredential ? 'השלמת הרשמה עם Google — בחרו סוג חשבון' : 'הרשמה או התחברות'}
+            </h2>
             <div className="grid gap-4">
               <button
                 onClick={() => chooseAccountType('consumer')}
@@ -161,6 +190,18 @@ export default function Home() {
                 </span>
               </button>
             </div>
+
+            {!googleCredential && (
+              <>
+                <div className="my-5 flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
+                  <div className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+                  או
+                  <div className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+                </div>
+                <GoogleSignInButton onCredential={handleGoogleCredential} />
+                {error && <p className="mt-3 text-center text-sm text-rose-600 dark:text-rose-400">{error}</p>}
+              </>
+            )}
           </div>
         ) : (
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 shadow-sm">

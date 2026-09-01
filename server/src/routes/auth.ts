@@ -8,6 +8,7 @@ import { signToken, type AuthTokenPayload } from '../utils/jwt.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { PhoneAuthError, requestPhoneCode, verifyPhoneCode, type PhoneAuthChannel } from '../services/phoneAuth.js';
+import { GoogleAuthError, verifyGoogleCredential } from '../services/googleAuth.js';
 
 const router = Router();
 const OTP_TTL_MINUTES = 5;
@@ -84,13 +85,56 @@ router.post(
 );
 
 router.post(
+  '/google',
+  asyncHandler(async (req, res) => {
+    const { credential } = req.body as { credential?: string };
+    if (!credential) {
+      res.status(400).json({ error: 'חסר אישור Google' });
+      return;
+    }
+
+    let profile;
+    try {
+      profile = await verifyGoogleCredential(credential);
+    } catch (err) {
+      const message = err instanceof GoogleAuthError ? err.message : 'אימות Google נכשל';
+      res.status(400).json({ error: message });
+      return;
+    }
+
+    // מחפשים קודם לפי googleId (התחברות חוזרת), ואם לא נמצא - לפי אימייל (קישור לחשבון טלפון קיים).
+    let user = await User.findOne({ googleId: profile.googleId });
+    if (!user) user = await User.findOne({ email: profile.email });
+
+    if (!user) {
+      // משתמש חדש לגמרי - עדיין חייב להשלים ולאמת מספר טלפון (הטלפון הוא שדה חובה במערכת),
+      // אז לא יוצרים משתמש כאן; הלקוח ימשיך לזרימת ה-OTP הרגילה עם ה-credential הזה מצורף.
+      res.json({ needsPhone: true, name: profile.name });
+      return;
+    }
+
+    if (!user.googleId) user.googleId = profile.googleId;
+    user.lastLoginAt = new Date();
+    await user.save();
+
+    const token = signToken({
+      sub: String(user._id),
+      tenantId: user.tenantId,
+      role: user.role as AuthTokenPayload['role'],
+    });
+    res.json({ token, user });
+  }),
+);
+
+router.post(
   '/otp/verify',
   asyncHandler(async (req, res) => {
-    const { phone, code, name, accountType } = req.body as {
+    const { phone, code, name, accountType, googleCredential } = req.body as {
       phone?: string;
       code?: string;
       name?: string;
       accountType?: 'consumer' | 'admin';
+      googleCredential?: string;
     };
     const via: PhoneAuthChannel | undefined = CHANNELS.includes(req.body?.via) ? req.body.via : undefined;
 
@@ -153,6 +197,17 @@ router.post(
     await otp.save();
 
     if (!user) {
+      // אם ההרשמה הגיעה מזרימת "התחברות עם Google" - מאמתים שוב את ה-credential כאן (ולא סומכים
+      // על googleId גולמי מהלקוח), כדי שלא יהיה אפשר "לתפוס" חשבון Google של מישהו אחר מראש.
+      let googleProfile: { googleId: string; email: string } | undefined;
+      if (googleCredential) {
+        try {
+          googleProfile = await verifyGoogleCredential(googleCredential);
+        } catch {
+          // טוקן Google לא תקף/פג - לא חוסם את ההרשמה, פשוט לא מקשרים חשבון Google.
+        }
+      }
+
       // כל הרשמה חדשה מקבלת tenantId ייחודי משלה - מוסד חדש חייב להיות מבודד מנתוני מוסדות אחרים,
       // ולא לשתף (ולראות) ציוד/אתרים/קריאות שירות של מוסד קיים.
       user = await User.create({
@@ -161,6 +216,7 @@ router.post(
         phone,
         role: accountType === 'admin' ? 'admin' : 'consumer',
         isActive: true,
+        ...(googleProfile ? { googleId: googleProfile.googleId, email: googleProfile.email } : {}),
       });
     } else if (trimmedName) {
       // מעדכן את השם בכל התחברות שבה הוזן שם (לא רק בהרשמה הראשונה) - כדי שעדכון שם ישמר בפועל.
