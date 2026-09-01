@@ -1,0 +1,12 @@
+node_modules/
+dist/
+server/dist/
+server/logs/
+server/uploads/
+.env
+.env.local
+.env.production
+server/.env
+server/.env.local
+*.log
+.DS_Store
