@@ -13,6 +13,7 @@ import InstitutionProductsList from './pages/institution/ProductsList';
 import InstitutionProductDetail from './pages/institution/ProductDetail';
 import Labels from './pages/institution/Labels';
 import InstitutionServiceRequests from './pages/institution/ServiceRequests';
+import AdminHome from './pages/admin/AdminHome';
 import NotFound from './pages/NotFound';
 
 /** בודק כל 30 שניות אם הסשן (טוקן בתוקף שעה) פג — ומתנתק אוטומטית אם כן, כדי לחייב כניסה מחודשת לפי טלפון. */
@@ -99,6 +100,15 @@ export default function App() {
             element={
               <RoleGate role="admin">
                 <InstitutionServiceRequests />
+              </RoleGate>
+            }
+          />
+
+          <Route
+            path="/admin"
+            element={
+              <RoleGate role="superadmin">
+                <AdminHome />
               </RoleGate>
             }
           />

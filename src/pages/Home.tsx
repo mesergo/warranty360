@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useGoogleLogin, useRequestOtp, useVerifyOtp, type PhoneAuthChannel } from '../hooks/useAuthApi';
 import { useAuth } from '../store/auth';
 import { ApiError } from '../lib/api';
+import { roleHomePath } from '../lib/roleHome';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
 
 const FEATURES = [
@@ -70,7 +71,7 @@ export default function Home() {
       try {
         const res = await googleLogin.mutateAsync({ credential: googleCredential, accountType: type });
         if ('token' in res) {
-          navigate(res.user.role === 'consumer' ? '/consumer' : '/institution');
+          navigate(roleHomePath(res.user.role));
         }
       } catch (err) {
         setError(err instanceof ApiError ? err.message : 'ההתחברות עם Google נכשלה');
@@ -91,7 +92,7 @@ export default function Home() {
     try {
       const res = await googleLogin.mutateAsync({ credential });
       if ('token' in res) {
-        navigate(res.user.role === 'consumer' ? '/consumer' : '/institution');
+        navigate(roleHomePath(res.user.role));
         return;
       }
       // משתמש חדש - רק נדרשת בחירת סוג חשבון (בלי טלפון בכלל).
@@ -126,7 +127,7 @@ export default function Home() {
         via,
         accountType: accountType ?? 'consumer',
       });
-      navigate(res.user.role === 'consumer' ? '/consumer' : '/institution');
+      navigate(roleHomePath(res.user.role));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'הקוד שהוזן אינו תקין');
     }
@@ -162,7 +163,7 @@ export default function Home() {
             <p className="text-lg font-bold text-slate-900 dark:text-slate-100">שלום, {currentUser!.name} 👋</p>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">אתם מחוברים כעת למערכת.</p>
             <Link
-              to={currentUser!.role === 'consumer' ? '/consumer' : '/institution'}
+              to={roleHomePath(currentUser!.role)}
               className="mt-5 inline-block w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700"
             >
               כניסה לאזור האישי ⟵

@@ -1,7 +1,7 @@
 // טיפוסי הישויות של Warranty360, כפי שמוחזרות מה-API (Express + MongoDB/Mongoose).
 // שדות אבטחה פנימיים (code_hash, access_token, ip...) נשארים בשרת בלבד ולא נחשפים ב-API.
 
-export type UserRole = 'consumer' | 'admin' | 'technician';
+export type UserRole = 'consumer' | 'admin' | 'technician' | 'superadmin';
 
 export interface User {
   _id: string;

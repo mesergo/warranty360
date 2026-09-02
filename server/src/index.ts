@@ -26,6 +26,7 @@ process.on('uncaughtException', (err) => logCrash('uncaughtException', err));
 process.on('unhandledRejection', (err) => logCrash('unhandledRejection', err));
 
 import authRoutes from './routes/auth.js';
+import adminRoutes from './routes/admin.js';
 import lookupRoutes from './routes/lookups.js';
 import productRoutes from './routes/products.js';
 import documentRoutes from './routes/documents.js';
@@ -66,6 +67,7 @@ async function main() {
   // וכולל requireAuth פנימי - אחרת בקשה ל-/api/public/... הייתה נבלמת שם.
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
   app.use('/api/auth', authRoutes);
+  app.use('/api/admin', adminRoutes);
   app.use('/api/products', productRoutes);
   app.use('/api/documents', documentRoutes);
   app.use('/api/qr-tags', qrTagRoutes);

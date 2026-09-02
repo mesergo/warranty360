@@ -8,7 +8,7 @@ const userSchema = new Schema(
     phone: { type: String, unique: true, sparse: true },
     email: { type: String },
     googleId: { type: String, unique: true, sparse: true },
-    role: { type: String, enum: ['consumer', 'admin', 'technician'], required: true },
+    role: { type: String, enum: ['consumer', 'admin', 'technician', 'superadmin'], required: true },
     isActive: { type: Boolean, default: true },
     lastLoginAt: { type: Date },
   },
