@@ -1,10 +1,29 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connectDb } from './config/db.js';
 import { errorHandler } from './middleware/error.js';
+
+const __dirnameForCrashLog = path.dirname(fileURLToPath(import.meta.url));
+const CRASH_LOG = path.join(__dirnameForCrashLog, '..', '..', 'crash.log');
+
+// תופס קריסות שקורות מחוץ לזרימת הבקשות הרגילה של Express (שם errorHandler כבר מטפל בהכל),
+// וכותב אותן לקובץ שאנחנו שולטים בו - כי הלוגים של CloudPanel לא תמיד נגישים/מספקים stack trace.
+function logCrash(label: string, err: unknown) {
+  const line = `[${new Date().toISOString()}] ${label}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`;
+  try {
+    fs.appendFileSync(CRASH_LOG, line);
+  } catch {
+    // אם גם כתיבת הלוג נכשלת, אין מה לעשות - לפחות console.error עדיין ירוץ.
+  }
+  console.error(label, err);
+}
+
+process.on('uncaughtException', (err) => logCrash('uncaughtException', err));
+process.on('unhandledRejection', (err) => logCrash('unhandledRejection', err));
 
 import authRoutes from './routes/auth.js';
 import lookupRoutes from './routes/lookups.js';
@@ -76,6 +95,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('נכשל אתחול השרת:', err);
+  logCrash('נכשל אתחול השרת', err);
   process.exit(1);
 });
