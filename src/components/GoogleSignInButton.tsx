@@ -18,6 +18,9 @@ declare global {
 /** כפתור "התחברות עם Google" - לא מוצג אם לא הוגדר VITE_GOOGLE_CLIENT_ID. */
 export function GoogleSignInButton({ onCredential }: { onCredential: (credential: string) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // ref במקום תלות ב-deps, כדי שהאתחול ירוץ פעם אחת בלבד ולא בכל render שבו הפונקציה מוגדרת מחדש.
+  const onCredentialRef = useRef(onCredential);
+  onCredentialRef.current = onCredential;
 
   useEffect(() => {
     if (!CLIENT_ID) return;
@@ -27,7 +30,7 @@ export function GoogleSignInButton({ onCredential }: { onCredential: (credential
       if (cancelled || !window.google || !containerRef.current) return;
       window.google.accounts.id.initialize({
         client_id: CLIENT_ID!,
-        callback: (response) => onCredential(response.credential),
+        callback: (response) => onCredentialRef.current(response.credential),
       });
       window.google.accounts.id.renderButton(containerRef.current, {
         type: 'standard',
@@ -54,7 +57,8 @@ export function GoogleSignInButton({ onCredential }: { onCredential: (credential
       cancelled = true;
       clearInterval(interval);
     };
-  }, [onCredential]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!CLIENT_ID) return null;
 
