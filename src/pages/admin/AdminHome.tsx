@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { PageHeader } from '../../components/PageHeader';
 import { Badge } from '../../components/Badge';
-import { useAdminUsers, useCreateServiceProvider } from '../../hooks/useAdmin';
+import { WarrantyBadge } from '../../components/WarrantyBadge';
+import { useAdminProducts, useAdminUsers, useCreateServiceProvider } from '../../hooks/useAdmin';
 import {
   useBrands,
   useCreateBrand,
@@ -36,10 +37,15 @@ const PROVIDER_TYPE_LABEL: Record<ServiceProviderType, string> = {
 
 export default function AdminHome() {
   const { data: usersData, isLoading: usersLoading } = useAdminUsers();
+  const { data: productsData, isLoading: productsLoading } = useAdminProducts();
 
   return (
     <div>
-      <PageHeader icon="👑" title="ניהול מערכת" subtitle="כל המשתמשים במערכת, וניהול הקטלוג המשותף (מותגים, ספקים, דגמים, נותני שירות)." />
+      <PageHeader
+        icon="👑"
+        title="ניהול מערכת"
+        subtitle="כל המשתמשים והציוד בכל המוסדות והלקוחות הפרטיים, וניהול הקטלוג המשותף (מותגים, ספקים, דגמים, נותני שירות)."
+      />
 
       <div className="mx-auto max-w-6xl space-y-8 px-4 py-8">
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -87,6 +93,51 @@ export default function AdminHome() {
               </table>
               {usersData.items.length === 0 && (
                 <p className="py-4 text-center text-sm text-slate-400 dark:text-slate-500">אין משתמשים עדיין.</p>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <h2 className="font-bold text-slate-900 dark:text-slate-100">כל הציוד ({productsData?.items.length ?? 0})</h2>
+          {productsLoading && <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">טוען...</p>}
+          {productsData && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-right text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                    <th className="pb-2 font-medium">דגם</th>
+                    <th className="pb-2 font-medium">שייך ל</th>
+                    <th className="pb-2 font-medium">מבנה / מיקום</th>
+                    <th className="pb-2 font-medium">תום אחריות</th>
+                    <th className="pb-2 font-medium">סטטוס אחריות</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productsData.items.map((p) => (
+                    <tr key={p._id} className="border-b border-slate-50 last:border-0 dark:border-slate-800/60">
+                      <td className="py-2 font-medium text-slate-800 dark:text-slate-200">
+                        {p.productModelId?.brandId?.name} {p.productModelId?.modelName}
+                      </td>
+                      <td className="py-2 text-slate-600 dark:text-slate-400">
+                        {p.ownerUserId?.name ?? '—'}
+                        <span className="mr-1 text-xs text-slate-400 dark:text-slate-500" dir="ltr">
+                          {p.ownerUserId?.phone ? ` ${p.ownerUserId.phone}` : ''}
+                        </span>
+                      </td>
+                      <td className="py-2 text-slate-500 dark:text-slate-400">
+                        {p.siteId?.name ?? '—'} {p.locationId?.name && `/ ${p.locationId.name}`}
+                      </td>
+                      <td className="py-2 text-slate-500 dark:text-slate-400">{formatDate(p.warrantyEnd)}</td>
+                      <td className="py-2">
+                        <WarrantyBadge status={p.warrantyStatus} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {productsData.items.length === 0 && (
+                <p className="py-4 text-center text-sm text-slate-400 dark:text-slate-500">אין עדיין ציוד רשום במערכת.</p>
               )}
             </div>
           )}

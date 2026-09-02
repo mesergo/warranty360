@@ -1,11 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import type { ServiceProvider, ServiceProviderType, User } from '../types';
+import type { Product, ServiceProvider, ServiceProviderType, User } from '../types';
+
+/** כמו Product הרגיל, אבל ownerUserId מגיע populated (רק במסלול ניהול המערכת). */
+export type AdminProduct = Omit<Product, 'ownerUserId'> & {
+  ownerUserId?: Pick<User, 'name' | 'phone' | 'email'>;
+};
 
 export function useAdminUsers() {
   return useQuery({
     queryKey: ['admin', 'users'],
     queryFn: () => api.get<{ items: User[] }>('/admin/users'),
+  });
+}
+
+export function useAdminProducts() {
+  return useQuery({
+    queryKey: ['admin', 'products'],
+    queryFn: () => api.get<{ items: AdminProduct[] }>('/admin/products'),
   });
 }
 
