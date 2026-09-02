@@ -63,10 +63,22 @@ export default function Home() {
   // "התחברות" למספר שבפועל אינו רשום שקולה בפועל להרשמה — לכן מציגים שדה שם ומסמנים זאת בברור.
   const isEffectivelyRegistering = mode === 'register' || (step === 'code' && !userExists);
 
-  function chooseAccountType(type: AccountType) {
+  async function chooseAccountType(type: AccountType) {
+    setError(null);
+    if (googleCredential) {
+      // השלמת הרשמה עם Google - אין טלפון בכלל, רק צריך לדעת איזה סוג חשבון ליצור.
+      try {
+        const res = await googleLogin.mutateAsync({ credential: googleCredential, accountType: type });
+        if ('token' in res) {
+          navigate(res.user.role === 'consumer' ? '/consumer' : '/institution');
+        }
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'ההתחברות עם Google נכשלה');
+      }
+      return;
+    }
     setAccountType(type);
     setStep('details');
-    setError(null);
   }
 
   function chooseMode(next: Mode) {
@@ -77,15 +89,13 @@ export default function Home() {
   async function handleGoogleCredential(credential: string) {
     setError(null);
     try {
-      const res = await googleLogin.mutateAsync(credential);
+      const res = await googleLogin.mutateAsync({ credential });
       if ('token' in res) {
         navigate(res.user.role === 'consumer' ? '/consumer' : '/institution');
         return;
       }
-      // משתמש חדש - טלפון הוא שדה חובה, ממשיכים לזרימת האימות הרגילה עם שם מוצע מ-Google.
+      // משתמש חדש - רק נדרשת בחירת סוג חשבון (בלי טלפון בכלל).
       setGoogleCredential(credential);
-      setName(res.name);
-      setMode('register');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'ההתחברות עם Google נכשלה');
     }
@@ -115,7 +125,6 @@ export default function Home() {
         name,
         via,
         accountType: accountType ?? 'consumer',
-        googleCredential: googleCredential ?? undefined,
       });
       navigate(res.user.role === 'consumer' ? '/consumer' : '/institution');
     } catch (err) {
@@ -199,9 +208,9 @@ export default function Home() {
                   <div className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
                 </div>
                 <GoogleSignInButton onCredential={handleGoogleCredential} />
-                {error && <p className="mt-3 text-center text-sm text-rose-600 dark:text-rose-400">{error}</p>}
               </>
             )}
+            {error && <p className="mt-3 text-center text-sm text-rose-600 dark:text-rose-400">{error}</p>}
           </div>
         ) : (
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 shadow-sm">

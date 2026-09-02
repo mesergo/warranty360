@@ -4,7 +4,8 @@ const userSchema = new Schema(
   {
     tenantId: { type: String, required: true, index: true },
     name: { type: String, required: true },
-    phone: { type: String, required: true, unique: true },
+    // אופציונלי - משתמש שנרשם עם Google בלבד לא חייב להזין טלפון.
+    phone: { type: String, unique: true, sparse: true },
     email: { type: String },
     googleId: { type: String, unique: true, sparse: true },
     role: { type: String, enum: ['consumer', 'admin', 'technician'], required: true },

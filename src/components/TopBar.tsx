@@ -24,7 +24,7 @@ export function TopBar() {
               <div className="hidden text-left text-sm sm:block">
                 <p className="font-medium text-slate-900 dark:text-slate-100">{currentUser.name}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400" dir="ltr">
-                  {currentUser.phone}
+                  {currentUser.phone ?? currentUser.email ?? ''}
                 </p>
               </div>
               <button

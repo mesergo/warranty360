@@ -7,7 +7,7 @@ export interface User {
   _id: string;
   tenantId: string;
   name: string;
-  phone: string;
+  phone?: string;
   email?: string;
   role: UserRole;
   isActive: boolean;

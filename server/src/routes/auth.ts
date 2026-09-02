@@ -87,7 +87,10 @@ router.post(
 router.post(
   '/google',
   asyncHandler(async (req, res) => {
-    const { credential } = req.body as { credential?: string };
+    const { credential, accountType } = req.body as {
+      credential?: string;
+      accountType?: 'consumer' | 'admin';
+    };
     if (!credential) {
       res.status(400).json({ error: 'חסר אישור Google' });
       return;
@@ -107,10 +110,21 @@ router.post(
     if (!user) user = await User.findOne({ email: profile.email });
 
     if (!user) {
-      // משתמש חדש לגמרי - עדיין חייב להשלים ולאמת מספר טלפון (הטלפון הוא שדה חובה במערכת),
-      // אז לא יוצרים משתמש כאן; הלקוח ימשיך לזרימת ה-OTP הרגילה עם ה-credential הזה מצורף.
-      res.json({ needsPhone: true, name: profile.name });
-      return;
+      if (!accountType) {
+        // משתמש חדש - עדיין לא ידוע אם מדובר בלקוח פרטי או מוסד, מחזירים ללקוח לבחור.
+        res.json({ needsAccountType: true, name: profile.name });
+        return;
+      }
+      // הרשמה מלאה עם Google בלבד - בלי טלפון בכלל. כל הרשמה חדשה מקבלת tenantId ייחודי
+      // משלה, כדי שמוסד חדש יהיה מבודד מנתוני מוסדות אחרים.
+      user = await User.create({
+        tenantId: `tenant-${randomUUID()}`,
+        name: profile.name,
+        email: profile.email,
+        googleId: profile.googleId,
+        role: accountType === 'admin' ? 'admin' : 'consumer',
+        isActive: true,
+      });
     }
 
     if (!user.googleId) user.googleId = profile.googleId;
@@ -129,12 +143,11 @@ router.post(
 router.post(
   '/otp/verify',
   asyncHandler(async (req, res) => {
-    const { phone, code, name, accountType, googleCredential } = req.body as {
+    const { phone, code, name, accountType } = req.body as {
       phone?: string;
       code?: string;
       name?: string;
       accountType?: 'consumer' | 'admin';
-      googleCredential?: string;
     };
     const via: PhoneAuthChannel | undefined = CHANNELS.includes(req.body?.via) ? req.body.via : undefined;
 
@@ -197,17 +210,6 @@ router.post(
     await otp.save();
 
     if (!user) {
-      // אם ההרשמה הגיעה מזרימת "התחברות עם Google" - מאמתים שוב את ה-credential כאן (ולא סומכים
-      // על googleId גולמי מהלקוח), כדי שלא יהיה אפשר "לתפוס" חשבון Google של מישהו אחר מראש.
-      let googleProfile: { googleId: string; email: string } | undefined;
-      if (googleCredential) {
-        try {
-          googleProfile = await verifyGoogleCredential(googleCredential);
-        } catch {
-          // טוקן Google לא תקף/פג - לא חוסם את ההרשמה, פשוט לא מקשרים חשבון Google.
-        }
-      }
-
       // כל הרשמה חדשה מקבלת tenantId ייחודי משלה - מוסד חדש חייב להיות מבודד מנתוני מוסדות אחרים,
       // ולא לשתף (ולראות) ציוד/אתרים/קריאות שירות של מוסד קיים.
       user = await User.create({
@@ -216,7 +218,6 @@ router.post(
         phone,
         role: accountType === 'admin' ? 'admin' : 'consumer',
         isActive: true,
-        ...(googleProfile ? { googleId: googleProfile.googleId, email: googleProfile.email } : {}),
       });
     } else if (trimmedName) {
       // מעדכן את השם בכל התחברות שבה הוזן שם (לא רק בהרשמה הראשונה) - כדי שעדכון שם ישמר בפועל.
