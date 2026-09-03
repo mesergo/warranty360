@@ -2,7 +2,19 @@ import { useState } from 'react';
 import { PageHeader } from '../../components/PageHeader';
 import { Badge } from '../../components/Badge';
 import { WarrantyBadge } from '../../components/WarrantyBadge';
-import { useAdminProducts, useAdminUsers, useCreateServiceProvider } from '../../hooks/useAdmin';
+import {
+  useAdminProducts,
+  useAdminUsers,
+  useCreateServiceProvider,
+  useDeleteBrand,
+  useDeletePartner,
+  useDeleteProductModel,
+  useDeleteServiceProvider,
+  useUpdateBrand,
+  useUpdatePartner,
+  useUpdateProductModel,
+  useUpdateServiceProvider,
+} from '../../hooks/useAdmin';
 import {
   useBrands,
   useCreateBrand,
@@ -13,6 +25,7 @@ import {
   useServiceProviders,
 } from '../../hooks/useLookups';
 import { formatDate } from '../../lib/warranty';
+import { ApiError } from '../../lib/api';
 import type { PartnerType, ServiceProviderType, UserRole } from '../../types';
 
 const ROLE_LABEL: Record<UserRole, string> = {
@@ -170,13 +183,95 @@ const inputClass =
   'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100';
 const selectClass = `${inputClass} bg-white dark:bg-slate-900`;
 
+/** רשימה גוללת של פריטים קיימים, עם עריכה ומחיקה - משותפת לכל כרטיסי הקטלוג. */
+function ItemList<T>({
+  items,
+  error,
+  children,
+}: {
+  items: T[];
+  error?: string | null;
+  children: (item: T, index: number) => React.ReactNode;
+}) {
+  return (
+    <div className="mt-3 max-h-56 space-y-1.5 overflow-y-auto pl-1">
+      {items.map((item, i) => children(item, i))}
+      {items.length === 0 && <p className="py-2 text-center text-xs text-slate-400 dark:text-slate-500">אין פריטים עדיין.</p>}
+      {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+    </div>
+  );
+}
+
+function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <button type="button" onClick={onEdit} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-slate-700 dark:hover:text-indigo-400" aria-label="עריכה">
+        ✎
+      </button>
+      <button type="button" onClick={onDelete} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-slate-700 dark:hover:text-rose-400" aria-label="מחיקה">
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function errMsg(err: unknown): string {
+  return err instanceof ApiError ? err.message : 'שגיאה בביצוע הפעולה';
+}
+
 function BrandsCard() {
   const { data } = useBrands();
   const createBrand = useCreateBrand();
+  const updateBrand = useUpdateBrand();
+  const deleteBrand = useDeleteBrand();
   const [name, setName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <Card title={`מותגים (${data?.items.length ?? 0})`}>
+      <ItemList items={data?.items ?? []} error={error}>
+        {(b) =>
+          editingId === b._id ? (
+            <form
+              key={b._id}
+              className="flex gap-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setError(null);
+                updateBrand.mutate(
+                  { id: b._id, name: editName.trim() },
+                  { onSuccess: () => setEditingId(null), onError: (err) => setError(errMsg(err)) },
+                );
+              }}
+            >
+              <input value={editName} onChange={(e) => setEditName(e.target.value)} className={`${inputClass} py-1`} autoFocus />
+              <button type="submit" className="shrink-0 rounded bg-indigo-600 px-2 text-xs font-medium text-white">
+                שמירה
+              </button>
+              <button type="button" onClick={() => setEditingId(null)} className="shrink-0 text-xs text-slate-400">
+                ביטול
+              </button>
+            </form>
+          ) : (
+            <div key={b._id} className="flex items-center justify-between rounded-lg px-2 py-1 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50">
+              <span className="text-slate-700 dark:text-slate-300">{b.name}</span>
+              <RowActions
+                onEdit={() => {
+                  setEditingId(b._id);
+                  setEditName(b.name);
+                  setError(null);
+                }}
+                onDelete={() => {
+                  setError(null);
+                  deleteBrand.mutate(b._id, { onError: (err) => setError(errMsg(err)) });
+                }}
+              />
+            </div>
+          )
+        }
+      </ItemList>
       <form
         className="mt-3 flex gap-2"
         onSubmit={(e) => {
@@ -198,15 +293,78 @@ function BrandsCard() {
   );
 }
 
+const PARTNER_TYPE_LABEL: Record<PartnerType, string> = { importer: 'יבואן', supplier: 'ספק' };
+
 function PartnersCard() {
   const { data } = usePartners();
   const createPartner = useCreatePartner();
+  const updatePartner = useUpdatePartner();
+  const deletePartner = useDeletePartner();
   const [name, setName] = useState('');
   const [type, setType] = useState<PartnerType>('importer');
   const [phone, setPhone] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editType, setEditType] = useState<PartnerType>('importer');
+  const [editPhone, setEditPhone] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <Card title={`ספקים / יבואנים (${data?.items.length ?? 0})`}>
+      <ItemList items={data?.items ?? []} error={error}>
+        {(p) =>
+          editingId === p._id ? (
+            <form
+              key={p._id}
+              className="space-y-1 rounded-lg bg-slate-50 p-2 dark:bg-slate-700/50"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setError(null);
+                updatePartner.mutate(
+                  { id: p._id, name: editName.trim(), type: editType, phone: editPhone.trim() },
+                  { onSuccess: () => setEditingId(null), onError: (err) => setError(errMsg(err)) },
+                );
+              }}
+            >
+              <div className="flex gap-1">
+                <input value={editName} onChange={(e) => setEditName(e.target.value)} className={`${inputClass} py-1`} autoFocus />
+                <select value={editType} onChange={(e) => setEditType(e.target.value as PartnerType)} className={`${selectClass} w-24 py-1`}>
+                  <option value="importer">יבואן</option>
+                  <option value="supplier">ספק</option>
+                </select>
+              </div>
+              <div className="flex gap-1">
+                <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="טלפון" className={`${inputClass} py-1`} />
+                <button type="submit" className="shrink-0 rounded bg-indigo-600 px-2 text-xs font-medium text-white">
+                  שמירה
+                </button>
+                <button type="button" onClick={() => setEditingId(null)} className="shrink-0 text-xs text-slate-400">
+                  ביטול
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div key={p._id} className="flex items-center justify-between rounded-lg px-2 py-1 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50">
+              <span className="text-slate-700 dark:text-slate-300">
+                {p.name} <span className="text-xs text-slate-400 dark:text-slate-500">· {PARTNER_TYPE_LABEL[p.type]}</span>
+              </span>
+              <RowActions
+                onEdit={() => {
+                  setEditingId(p._id);
+                  setEditName(p.name);
+                  setEditType(p.type);
+                  setEditPhone(p.phone ?? '');
+                  setError(null);
+                }}
+                onDelete={() => {
+                  setError(null);
+                  deletePartner.mutate(p._id, { onError: (err) => setError(errMsg(err)) });
+                }}
+              />
+            </div>
+          )
+        }
+      </ItemList>
       <form
         className="mt-3 space-y-2"
         onSubmit={(e) => {
@@ -244,12 +402,77 @@ function ProductModelsCard() {
   const { data: modelsData } = useProductModels();
   const { data: brandsData } = useBrands();
   const createModel = useCreateProductModel();
+  const updateModel = useUpdateProductModel();
+  const deleteModel = useDeleteProductModel();
   const [brandId, setBrandId] = useState('');
   const [category, setCategory] = useState('');
   const [modelName, setModelName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBrandId, setEditBrandId] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editModelName, setEditModelName] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <Card title={`דגמים (${modelsData?.items.length ?? 0})`}>
+      <ItemList items={modelsData?.items ?? []} error={error}>
+        {(m) =>
+          editingId === m._id ? (
+            <form
+              key={m._id}
+              className="space-y-1 rounded-lg bg-slate-50 p-2 dark:bg-slate-700/50"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setError(null);
+                updateModel.mutate(
+                  { id: m._id, brandId: editBrandId, category: editCategory.trim(), modelName: editModelName.trim() },
+                  { onSuccess: () => setEditingId(null), onError: (err) => setError(errMsg(err)) },
+                );
+              }}
+            >
+              <select value={editBrandId} onChange={(e) => setEditBrandId(e.target.value)} className={`${selectClass} py-1`}>
+                {brandsData?.items.map((b) => (
+                  <option key={b._id} value={b._id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+              <div className="flex gap-1">
+                <input value={editModelName} onChange={(e) => setEditModelName(e.target.value)} className={`${inputClass} py-1`} autoFocus />
+                <input value={editCategory} onChange={(e) => setEditCategory(e.target.value)} className={`${inputClass} py-1`} placeholder="קטגוריה" />
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" className="shrink-0 rounded bg-indigo-600 px-2 text-xs font-medium text-white">
+                  שמירה
+                </button>
+                <button type="button" onClick={() => setEditingId(null)} className="shrink-0 text-xs text-slate-400">
+                  ביטול
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div key={m._id} className="flex items-center justify-between rounded-lg px-2 py-1 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50">
+              <span className="text-slate-700 dark:text-slate-300">
+                {m.brandId?.name} {m.modelName}{' '}
+                <span className="text-xs text-slate-400 dark:text-slate-500">· {m.category}</span>
+              </span>
+              <RowActions
+                onEdit={() => {
+                  setEditingId(m._id);
+                  setEditBrandId(m.brandId?._id ?? '');
+                  setEditCategory(m.category);
+                  setEditModelName(m.modelName);
+                  setError(null);
+                }}
+                onDelete={() => {
+                  setError(null);
+                  deleteModel.mutate(m._id, { onError: (err) => setError(errMsg(err)) });
+                }}
+              />
+            </div>
+          )
+        }
+      </ItemList>
       <form
         className="mt-3 space-y-2"
         onSubmit={(e) => {
@@ -289,14 +512,92 @@ function ServiceProvidersCard() {
   const { data } = useServiceProviders();
   const { data: brandsData } = useBrands();
   const createProvider = useCreateServiceProvider();
+  const updateProvider = useUpdateServiceProvider();
+  const deleteProvider = useDeleteServiceProvider();
   const [name, setName] = useState('');
   const [providerType, setProviderType] = useState<ServiceProviderType>('importer_lab');
   const [phone, setPhone] = useState('');
   const [categories, setCategories] = useState('');
   const [brandId, setBrandId] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editType, setEditType] = useState<ServiceProviderType>('importer_lab');
+  const [editPhone, setEditPhone] = useState('');
+  const [editCategories, setEditCategories] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <Card title={`נותני שירות (${data?.items.length ?? 0})`}>
+      <ItemList items={data?.items ?? []} error={error}>
+        {(sp) =>
+          editingId === sp._id ? (
+            <form
+              key={sp._id}
+              className="space-y-1 rounded-lg bg-slate-50 p-2 dark:bg-slate-700/50"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setError(null);
+                updateProvider.mutate(
+                  {
+                    id: sp._id,
+                    name: editName.trim(),
+                    providerType: editType,
+                    phone: editPhone.trim(),
+                    categories: editCategories.split(',').map((c) => c.trim()).filter(Boolean),
+                  },
+                  { onSuccess: () => setEditingId(null), onError: (err) => setError(errMsg(err)) },
+                );
+              }}
+            >
+              <div className="flex gap-1">
+                <input value={editName} onChange={(e) => setEditName(e.target.value)} className={`${inputClass} py-1`} autoFocus />
+                <select value={editType} onChange={(e) => setEditType(e.target.value as ServiceProviderType)} className={`${selectClass} w-28 py-1`}>
+                  {(Object.keys(PROVIDER_TYPE_LABEL) as ServiceProviderType[]).map((t) => (
+                    <option key={t} value={t}>
+                      {PROVIDER_TYPE_LABEL[t]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="טלפון" className={`${inputClass} py-1`} />
+              <input
+                value={editCategories}
+                onChange={(e) => setEditCategories(e.target.value)}
+                placeholder="קטגוריות (מופרדות בפסיק)"
+                className={`${inputClass} py-1`}
+              />
+              <div className="flex gap-2">
+                <button type="submit" className="shrink-0 rounded bg-indigo-600 px-2 text-xs font-medium text-white">
+                  שמירה
+                </button>
+                <button type="button" onClick={() => setEditingId(null)} className="shrink-0 text-xs text-slate-400">
+                  ביטול
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div key={sp._id} className="flex items-center justify-between rounded-lg px-2 py-1 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50">
+              <span className="text-slate-700 dark:text-slate-300">
+                {sp.name} <span className="text-xs text-slate-400 dark:text-slate-500">· {PROVIDER_TYPE_LABEL[sp.providerType]}</span>
+              </span>
+              <RowActions
+                onEdit={() => {
+                  setEditingId(sp._id);
+                  setEditName(sp.name);
+                  setEditType(sp.providerType);
+                  setEditPhone(sp.phone ?? '');
+                  setEditCategories((sp.categories ?? []).join(', '));
+                  setError(null);
+                }}
+                onDelete={() => {
+                  setError(null);
+                  deleteProvider.mutate(sp._id, { onError: (err) => setError(errMsg(err)) });
+                }}
+              />
+            </div>
+          )
+        }
+      </ItemList>
       <form
         className="mt-3 space-y-2"
         onSubmit={(e) => {
