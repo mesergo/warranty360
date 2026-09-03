@@ -35,6 +35,13 @@ router.patch(
       res.status(404).json({ error: 'מדבקה לא נמצאה' });
       return;
     }
+    // מוודאים שהמוצר שהמדבקה מצביעה עליו שייך לטננט של המשתמש - אחרת אפשר לעדכן מדבקה
+    // (סטטוס הדפסה) ששייכת למוסד אחר לגמרי.
+    const product = await Product.findOne({ _id: tag.productId, tenantId: req.auth!.tenantId });
+    if (!product) {
+      res.status(403).json({ error: 'אין הרשאה למדבקה זו' });
+      return;
+    }
     const { printed } = req.body as { printed?: boolean };
     if (printed !== undefined) tag.printed = printed;
     await tag.save();

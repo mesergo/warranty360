@@ -1,9 +1,11 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import { ServiceRequest, ServiceMessage } from '../models/ServiceRequest.js';
 import { Product } from '../models/Product.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getWarrantyStatus } from '../utils/warranty.js';
+import { assertProductAccess } from '../utils/productAccess.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -21,21 +23,19 @@ const PRODUCT_POPULATE = [
   { path: 'assignedPartnerId' },
 ];
 
-async function assertProductAccess(productId: string, auth: { sub: string; tenantId: string; role: string }) {
-  const product = await Product.findById(productId);
-  if (!product) return null;
-  const isOwner = product.ownerUserId && String(product.ownerUserId) === auth.sub;
-  const isTenantStaff = auth.role !== 'consumer' && product.tenantId === auth.tenantId;
-  if (!isOwner && !isTenantStaff) return undefined;
-  return product;
-}
-
 router.get(
   '/',
   asyncHandler(async (req, res) => {
     const { productId } = req.query as { productId?: string };
 
-    if (productId) {
+    if (productId !== undefined) {
+      // חובה לוודא שזו מחרוזת ObjectId תקינה - אחרת ה-productId (שמשמש גם לבדיקת ההרשאה
+      // וגם, בנפרד, כפילטר השאילתה בפועל) עלול להגיע כאובייקט אופרטור של MongoDB (למשל
+      // ?productId[$in][]=... ש-Express מפרש כ-{ $in: [...] }) ולעקוף את הבידוד בין דיירים.
+      if (typeof productId !== 'string' || !mongoose.isValidObjectId(productId)) {
+        res.status(400).json({ error: 'מזהה מוצר לא תקין' });
+        return;
+      }
       const product = await assertProductAccess(productId, req.auth!);
       if (product === null) {
         res.status(404).json({ error: 'המוצר לא נמצא' });
@@ -154,6 +154,16 @@ router.patch(
 router.get(
   '/:id/messages',
   asyncHandler(async (req, res) => {
+    const request = await ServiceRequest.findById(req.params.id);
+    if (!request) {
+      res.status(404).json({ error: 'קריאת השירות לא נמצאה' });
+      return;
+    }
+    const product = await assertProductAccess(String(request.productId), req.auth!);
+    if (!product) {
+      res.status(product === null ? 404 : 403).json({ error: 'אין הרשאה' });
+      return;
+    }
     res.json({
       items: await ServiceMessage.find({ serviceRequestId: req.params.id }).sort({ createdAt: 1 }),
     });

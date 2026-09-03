@@ -14,6 +14,15 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   } catch {
     // עדיף כישלון שקט מקריסה על כתיבת אבחון
   }
-  const message = err instanceof Error ? err.message : 'שגיאה לא צפויה בשרת';
+  // שגיאה שמגיעה לכאן היא תמיד בלתי-צפויה (שגיאות "רגילות" תמיד נשלחות ישירות ע"י ה-route
+  // עם res.json ולא מגיעות לכאן) - ב-production לא מחזירים ללקוח את הפרטים הפנימיים
+  // (שם קולקציה/שדה, נתיב קובץ וכו') שיכולים להופיע ב-err.message; הם עדיין נכתבים מעלה
+  // לקובץ הלוג ול-console לצורך דיבאג.
+  const message =
+    process.env.NODE_ENV === 'production'
+      ? 'שגיאה לא צפויה בשרת'
+      : err instanceof Error
+        ? err.message
+        : 'שגיאה לא צפויה בשרת';
   res.status(500).json({ error: message });
 }

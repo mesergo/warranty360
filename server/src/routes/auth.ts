@@ -13,6 +13,7 @@ import { GoogleAuthError, verifyGoogleCredential } from '../services/googleAuth.
 const router = Router();
 const OTP_TTL_MINUTES = 5;
 const MAX_ATTEMPTS = 5;
+const REQUEST_COOLDOWN_SECONDS = 60;
 const CHANNELS: PhoneAuthChannel[] = ['sms', 'whatsapp', 'ivr'];
 
 // PHONE_AUTH_PROVIDER=external (ברירת מחדל) - שליחה ואימות אמיתיים מול wa.message.co.il.
@@ -30,6 +31,16 @@ router.post(
 
     if (!phone || !/^0\d{8,9}$/.test(phone)) {
       res.status(400).json({ error: 'מספר טלפון לא תקין' });
+      return;
+    }
+
+    // צד-שרת, לא רק ה-cooldown שבממשק: מונע בקשת קוד חדש שוב ושוב כדי "לאפס" את מונה
+    // הניסיונות של /otp/verify (שנספר per-OtpLogin, לא per-phone) ולבצע ניחוש בכוח גס.
+    const recentRequest = await OtpLogin.findOne({ phone, consumedAt: null })
+      .sort({ createdAt: -1 })
+      .select('createdAt');
+    if (recentRequest && Date.now() - recentRequest.createdAt.getTime() < REQUEST_COOLDOWN_SECONDS * 1000) {
+      res.status(429).json({ error: 'נשלח קוד לאחרונה, יש להמתין לפני בקשת קוד נוסף' });
       return;
     }
 
@@ -151,8 +162,14 @@ router.post(
     };
     const via: PhoneAuthChannel | undefined = CHANNELS.includes(req.body?.via) ? req.body.via : undefined;
 
-    if (!phone || !code) {
-      res.status(400).json({ error: 'חסר מספר טלפון או קוד' });
+    // חובה לוודא טיפוס/פורמט (לא רק "יש ערך") - אחרת phone/code עלולים להגיע כאובייקט
+    // אופרטור של MongoDB (למשל {"$gt": ""}) ולעקוף את ההתאמה המדויקת בשאילתות למטה.
+    if (!phone || typeof phone !== 'string' || !/^0\d{8,9}$/.test(phone)) {
+      res.status(400).json({ error: 'מספר טלפון לא תקין' });
+      return;
+    }
+    if (!code || typeof code !== 'string') {
+      res.status(400).json({ error: 'חסר קוד אימות' });
       return;
     }
 

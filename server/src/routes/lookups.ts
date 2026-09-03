@@ -58,7 +58,8 @@ router.post(
 router.get(
   '/partners',
   asyncHandler(async (_req, res) => {
-    res.json({ items: await Partner.find().sort({ name: 1 }) });
+    // webhookUrl הוא שדה אינטגרציה פנימי (נערך רק ע"י superadmin) - לא לחשוף אותו ללקוחות.
+    res.json({ items: await Partner.find().select('-webhookUrl').sort({ name: 1 }) });
   }),
 );
 
@@ -83,8 +84,13 @@ router.post(
 
 router.get(
   '/service-providers',
-  asyncHandler(async (_req, res) => {
-    res.json({ items: await ServiceProvider.find() });
+  asyncHandler(async (req, res) => {
+    // ספק "פרטי" (isPrivate) שייך למוסד ספציפי - לא לחשוף אותו למוסדות/לקוחות אחרים.
+    res.json({
+      items: await ServiceProvider.find({
+        $or: [{ isPrivate: { $ne: true } }, { tenantId: req.auth!.tenantId }],
+      }),
+    });
   }),
 );
 
@@ -126,6 +132,12 @@ router.post(
     const { siteId, name, parentId } = req.body as { siteId?: string; name?: string; parentId?: string };
     if (!siteId || !name?.trim()) {
       res.status(400).json({ error: 'חובה לבחור מבנה ולהזין שם מיקום' });
+      return;
+    }
+    // מוודאים שהמבנה שייך לטננט של הקורא - אחרת אפשר "לתלות" מיקום במבנה של מוסד אחר.
+    const site = await Site.findOne({ _id: siteId, tenantId: req.auth!.tenantId });
+    if (!site) {
+      res.status(403).json({ error: 'אין הרשאה למבנה זה' });
       return;
     }
     const location = await Location.create({ siteId, name: name.trim(), parentId: parentId || undefined });

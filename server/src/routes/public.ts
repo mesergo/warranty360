@@ -19,13 +19,16 @@ router.get(
     tag.lastScannedAt = new Date();
     await tag.save();
 
+    // סריקה ציבורית ללא התחברות - חושפים רק את השדות שהמסך הציבורי באמת מציג
+    // (שם דגם/מבנה/מיקום/ספק ותוקף אחריות), לא את כל מסמך המוצר (tenantId, מספר סידורי,
+    // הערות פנימיות, כתובת מדויקת, webhookUrl וכו').
     const product = await Product.findById(tag.productId).populate([
-      { path: 'productModelId', populate: { path: 'brandId' } },
-      { path: 'siteId' },
-      { path: 'locationId' },
-      { path: 'importerPartnerId' },
-      { path: 'supplierPartnerId' },
-      { path: 'warrantyServiceProviderId' },
+      { path: 'productModelId', select: 'modelName category', populate: { path: 'brandId', select: 'name' } },
+      { path: 'siteId', select: 'name' },
+      { path: 'locationId', select: 'name' },
+      { path: 'importerPartnerId', select: 'name phone' },
+      { path: 'supplierPartnerId', select: 'name phone' },
+      { path: 'warrantyServiceProviderId', select: 'name phone slaHours' },
     ]);
     if (!product) {
       res.status(404).json({ error: 'המוצר המשויך למדבקה לא נמצא' });
@@ -35,7 +38,16 @@ router.get(
     res.json({
       productId: String(product._id),
       warrantyStatus: getWarrantyStatus(product.warrantyEnd),
-      product,
+      product: {
+        _id: product._id,
+        productModelId: product.productModelId,
+        siteId: product.siteId,
+        locationId: product.locationId,
+        importerPartnerId: product.importerPartnerId,
+        supplierPartnerId: product.supplierPartnerId,
+        warrantyServiceProviderId: product.warrantyServiceProviderId,
+        warrantyEnd: product.warrantyEnd,
+      },
     });
   }),
 );

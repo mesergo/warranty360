@@ -1,9 +1,27 @@
 import { Router } from 'express';
 import { Product } from '../models/Product.js';
 import { QrTag } from '../models/QrTag.js';
+import { Site, Location } from '../models/Site.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getWarrantyStatus } from '../utils/warranty.js';
+
+/** מוודא ש-siteId/locationId שהוזנו (אם בכלל) באמת שייכים לטננט של המשתמש. */
+async function assertSiteAndLocationOwnership(
+  data: Record<string, unknown>,
+  tenantId: string,
+): Promise<string | null> {
+  if (typeof data.siteId === 'string') {
+    const site = await Site.findOne({ _id: data.siteId, tenantId });
+    if (!site) return 'המבנה שנבחר אינו שייך למוסד שלך';
+  }
+  if (typeof data.locationId === 'string') {
+    const location = await Location.findById(data.locationId);
+    const site = location && (await Site.findOne({ _id: location.siteId, tenantId }));
+    if (!site) return 'המיקום שנבחר אינו שייך למוסד שלך';
+  }
+  return null;
+}
 
 const router = Router();
 router.use(requireAuth);
@@ -50,7 +68,17 @@ function shape(product: any) {
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { siteId, partnerId, status } = req.query as Record<string, string | undefined>;
+    const { siteId, partnerId, status } = req.query as Record<string, unknown>;
+    // req.query יכול להכיל אובייקטי אופרטור של MongoDB (למשל ?siteId[$ne]=x) ולא רק
+    // מחרוזות - דוחים כל דבר שאינו מחרוזת פשוטה במקום להעביר אותו ישירות לשאילתה.
+    if (
+      (siteId !== undefined && typeof siteId !== 'string') ||
+      (partnerId !== undefined && typeof partnerId !== 'string') ||
+      (status !== undefined && typeof status !== 'string')
+    ) {
+      res.status(400).json({ error: 'פרמטרים לא תקינים' });
+      return;
+    }
     const query: Record<string, unknown> = {};
 
     if (req.auth!.role === 'consumer') {
@@ -104,6 +132,15 @@ router.patch(
 
     const allowedFields = isTenantStaff ? STAFF_EDITABLE_FIELDS : CONSUMER_EDITABLE_FIELDS;
     const body = req.body as Record<string, unknown>;
+
+    if (isTenantStaff) {
+      const ownershipError = await assertSiteAndLocationOwnership(body, req.auth!.tenantId);
+      if (ownershipError) {
+        res.status(403).json({ error: ownershipError });
+        return;
+      }
+    }
+
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
         (product as any)[field] = body[field] || undefined;
@@ -138,6 +175,11 @@ router.post(
     }
 
     if (isStaff) {
+      const ownershipError = await assertSiteAndLocationOwnership(data, req.auth!.tenantId);
+      if (ownershipError) {
+        res.status(403).json({ error: ownershipError });
+        return;
+      }
       data.ownerUserId = undefined;
     } else {
       data.ownerUserId = req.auth!.sub;

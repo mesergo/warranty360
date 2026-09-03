@@ -38,8 +38,23 @@ import publicRoutes from './routes/public.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
+  const isProduction = process.env.NODE_ENV === 'production';
   const port = Number(process.env.PORT ?? 4000);
-  const mongoUri = process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017/warranty360';
+
+  // כשל מיידי וברור במקום נפילה שקטה למונגו מקומי לא מתוכנן - אותו עיקרון כמו
+  // JWT_SECRET ב-utils/jwt.ts. חוסר הגדרה זו גרם בעבר לתקלת production ממושכת וקשה לאבחון.
+  const mongoUri = process.env.MONGODB_URI;
+  if (!mongoUri) {
+    throw new Error('MONGODB_URI is not set');
+  }
+
+  // תצורת "מצב פיתוח פנימי"/דמו לאימות טלפון אסורה ב-production: היא עוקפת אימות אמיתי
+  // לגמרי (מחזירה את הקוד עצמו בתשובת ה-API, או משתמשת ב-bcrypt.compare בלי אימות ספק).
+  if (isProduction && (process.env.PHONE_AUTH_PROVIDER === 'internal' || process.env.OTP_DEMO_MODE === 'true')) {
+    throw new Error(
+      'תצורה לא בטוחה: PHONE_AUTH_PROVIDER=internal ו-OTP_DEMO_MODE=true אסורים כאשר NODE_ENV=production',
+    );
+  }
 
   await connectDb(mongoUri);
 
@@ -48,10 +63,10 @@ async function main() {
   app.use(
     cors({
       origin(origin, callback) {
-        // מאפשר גם origin שהוגדר וגם כל פורט localhost אחר (Vite עלול לעלות על פורט חלופי
-        // אם 5173 תפוס), כדי שסביבת הפיתוח לא תישבר בגלל CORS. ב-production יש להגדיר
-        // CLIENT_ORIGIN מדויק ולא לסמוך על הכלל הגורף הזה.
-        if (!origin || origin === configuredOrigin || /^http:\/\/localhost:\d+$/.test(origin)) {
+        // מאפשר גם origin שהוגדר וגם (רק מחוץ ל-production) כל פורט localhost אחר, כדי
+        // שסביבת הפיתוח לא תישבר בגלל CORS אם Vite עולה על פורט חלופי מ-5173.
+        const allowLocalhost = !isProduction && /^http:\/\/localhost:\d+$/.test(origin ?? '');
+        if (!origin || origin === configuredOrigin || allowLocalhost) {
           callback(null, true);
           return;
         }
